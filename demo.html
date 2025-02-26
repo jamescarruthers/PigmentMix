@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golden Paint Mixer with Kubelka-Munk Theory</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <style>
+        .paint-swatch {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin: 5px;
+            border: 1px solid #ddd;
+            cursor: pointer;
+        }
+
+        .paint-swatch.selected {
+            border: 3px solid #4299e1;
+        }
+
+        .reflectance-chart {
+            width: 100%;
+            height: 300px;
+            border: 1px solid #ddd;
+            margin-top: 20px;
+        }
+
+        .concentration-slider {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .result-swatch {
+            display: block;
+            width: 100px;
+            height: 100px;
+            border: 1px solid #ddd;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50">
+    <div class="container mx-auto p-4 max-w-6xl">
+        <h1 class="text-3xl font-bold text-center my-6">Golden Paint Mixer</h1>
+        <p class="text-center mb-8">Using Kubelka-Munk Theory for accurate pigment mixing simulation</p>
+
+        <div id="app" class="bg-white shadow-lg rounded-lg p-6">
+            <div id="loading" class="text-center p-10">
+                <p class="text-lg">Loading paint data and libraries...</p>
+            </div>
+
+            <div id="content" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Paint selection panel -->
+                    <div class="paint-selection">
+                        <h2 class="text-xl font-semibold mb-4">Available Paints</h2>
+                        <div id="paint-swatches" class="grid grid-cols-2 sm:grid-cols-3 gap-4"></div>
+                    </div>
+
+                    <!-- Mixing controls and results -->
+                    <div class="mixing-panel">
+                        <h2 class="text-xl font-semibold mb-4">Paint Mixture</h2>
+                        <div id="selected-paints" class="mb-6"></div>
+
+                        <div id="result-area" class="hidden">
+                            <h3 class="text-lg font-semibold">Mixed Result</h3>
+                            <div class="flex items-center mt-2">
+                                <div id="result-swatch" class="result-swatch"></div>
+                                <div class="ml-4">
+                                    <p>Hex: <span id="result-hex" class="font-mono"></span></p>
+                                    <p>RGB: <span id="result-rgb" class="font-mono"></span></p>
+                                </div>
+                            </div>
+
+                            <h3 class="text-lg font-semibold mt-6">Reflectance Curve</h3>
+                            <canvas id="reflectance-chart" width="500" height="300" class="reflectance-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-10 pt-6 border-t">
+                    <h2 class="text-xl font-semibold mb-2">About This Tool</h2>
+                    <p class="mb-2">This paint mixer simulates the mixing of Golden Heavy Body Acrylics using the
+                        Kubelka-Munk theory, which accurately models how pigments interact with light when mixed.</p>
+                    <p class="mb-2">Unlike RGB color mixing (which simulates how light mixes), Kubelka-Munk theory
+                        simulates how pigments mix, accounting for both light absorption and scattering properties. This
+                        provides more realistic results that better match actual paint mixing behavior.</p>
+                    <p>The spectral reflectance data for each paint comes from Golden Artist Colors' published data.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load our JavaScript files -->
+    <script src="kubelkamunk.js"></script>
+    <script src="paintdata.js"></script>
+
+    <script>
+        // Wait for both scripts to load before initializing the app
+        window.addEventListener('DOMContentLoaded', function () {
+            // Check if both libraries are available
+            const checkLibrariesLoaded = setInterval(function () {
+                if (window.KubelkaMunk && window.PaintData) {
+                    clearInterval(checkLibrariesLoaded);
+                    initializeApp();
+                }
+            }, 100);
+
+            // Set a timeout in case the libraries don't load
+            setTimeout(function () {
+                clearInterval(checkLibrariesLoaded);
+                if (!window.KubelkaMunk || !window.PaintData) {
+                    alert('Error loading required libraries. Please refresh the page.');
+                }
+            }, 5000);
+        });
+
+        function initializeApp() {
+            // Hide loading, show content
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('content').classList.remove('hidden');
+
+            // Initialize Kubelka-Munk
+            const km = new KubelkaMunk();
+
+            // Get paint data
+            const paints = window.PaintData.paints;
+
+            // State for selected paints
+            const selectedPaints = [];
+
+            // Populate paint swatches
+            const swatchesContainer = document.getElementById('paint-swatches');
+            paints.forEach(function (paint) {
+                const swatch = document.createElement('div');
+                swatch.className = 'paint-swatch-container';
+                swatch.innerHTML = `
+          <div class="paint-swatch" style="background-color: ${paint.rgb_hex}" data-id="${paint.id}"></div>
+          <div class="text-sm font-medium">${paint.color_name}</div>
+          <div class="text-xs text-gray-500">Series ${paint.series} (${paint.transparency})</div>
+        `;
+
+                // Add click event to toggle paint selection
+                const swatchElement = swatch.querySelector('.paint-swatch');
+                swatchElement.addEventListener('click', function () {
+                    togglePaintSelection(paint);
+                });
+
+                swatchesContainer.appendChild(swatch);
+            });
+
+            // Toggle paint selection
+            function togglePaintSelection(paint) {
+                const existingIndex = selectedPaints.findIndex(function (p) {
+                    return p.id === paint.id;
+                });
+
+                if (existingIndex >= 0) {
+                    // Remove the paint
+                    selectedPaints.splice(existingIndex, 1);
+                } else {
+                    // Add the paint with default concentration
+                    selectedPaints.push({
+                        id: paint.id,
+                        color_name: paint.color_name,
+                        rgb_hex: paint.rgb_hex,
+                        reflectance: paint.reflectance,
+                        concentration: 1
+                    });
+                }
+
+                // Update the UI
+                updateSelectedPaintsUI();
+                updateSwatchSelection();
+                updateMixedResult();
+            }
+
+            // Update the selected paints section
+            function updateSelectedPaintsUI() {
+                const container = document.getElementById('selected-paints');
+                container.innerHTML = '';
+
+                if (selectedPaints.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500">No paints selected. Click on paints to add them to your mixture.</p>';
+                    return;
+                }
+
+                selectedPaints.forEach(function (paint, index) {
+                    const paintElement = document.createElement('div');
+                    paintElement.className = 'flex items-center mb-4 p-2 border rounded';
+                    paintElement.innerHTML = `
+            <div style="background-color: ${paint.rgb_hex}" class="w-8 h-8 rounded-full mr-3"></div>
+            <div class="flex-1">
+              <div class="font-medium">${paint.color_name}</div>
+            </div>
+            <div class="w-32">
+              <label class="block text-sm">Concentration</label>
+              <input type="range" min="0.1" max="5" step="0.1" value="${paint.concentration}" 
+                     class="concentration-slider" data-index="${index}">
+              <div class="text-center text-sm">${paint.concentration}</div>
+            </div>
+            <button class="ml-2 text-red-500 p-2" data-index="${index}">✕</button>
+          `;
+
+                    // Add event listeners
+                    const slider = paintElement.querySelector('.concentration-slider');
+                    slider.addEventListener('input', function (e) {
+                        const value = parseFloat(e.target.value);
+                        const index = parseInt(e.target.dataset.index);
+                        selectedPaints[index].concentration = value;
+                        e.target.nextElementSibling.textContent = value;
+                        updateMixedResult();
+                    });
+
+                    const removeBtn = paintElement.querySelector('button');
+                    removeBtn.addEventListener('click', function () {
+                        selectedPaints.splice(index, 1);
+                        updateSelectedPaintsUI();
+                        updateSwatchSelection();
+                        updateMixedResult();
+                    });
+
+                    container.appendChild(paintElement);
+                });
+            }
+
+            // Update the selection state of paint swatches
+            function updateSwatchSelection() {
+                const swatches = document.querySelectorAll('.paint-swatch');
+                swatches.forEach(function (swatch) {
+                    const id = swatch.dataset.id;
+                    const isSelected = selectedPaints.some(function (p) {
+                        return p.id === id;
+                    });
+
+                    if (isSelected) {
+                        swatch.classList.add('selected');
+                    } else {
+                        swatch.classList.remove('selected');
+                    }
+                });
+            }
+
+            // Update the mixed result
+            function updateMixedResult() {
+                const resultArea = document.getElementById('result-area');
+
+                if (selectedPaints.length === 0) {
+                    resultArea.classList.add('hidden');
+                    return;
+                }
+
+                resultArea.classList.remove('hidden');
+
+                // Prepare components for mixing
+                const components = selectedPaints.map(function (paint) {
+                    return {
+                        reflectance: paint.reflectance,
+                        concentration: paint.concentration
+                    };
+                });
+
+                // Mix the paints using Kubelka-Munk
+                const mixedReflectance = km.mixReflectance(components);
+
+                // Convert to RGB and hex
+                const rgb = km.reflectanceToRGB(mixedReflectance);
+                const hexColor = km.rgbToHex(rgb);
+
+                // Update the result UI
+                document.getElementById('result-swatch').style.backgroundColor = hexColor;
+                document.getElementById('result-hex').textContent = hexColor;
+                document.getElementById('result-rgb').textContent = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+
+                // Draw the reflectance curve
+                drawReflectanceCurve(mixedReflectance);
+            }
+
+            // Draw the reflectance curve on a canvas
+            function drawReflectanceCurve(reflectance) {
+                const canvas = document.getElementById('reflectance-chart');
+                const ctx = canvas.getContext('2d');
+                const width = canvas.width;
+                const height = canvas.height;
+
+                // Clear canvas
+                ctx.clearRect(0, 0, width, height);
+
+                // Draw background grid
+                ctx.beginPath();
+                ctx.strokeStyle = '#eee';
+                for (let i = 0; i <= 10; i++) {
+                    const y = height - 30 - (i / 10) * (height - 40);
+                    ctx.moveTo(30, y);
+                    ctx.lineTo(width - 10, y);
+                }
+                for (let i = 0; i <= 30; i += 5) {
+                    const x = 30 + (i / 30) * (width - 40);
+                    ctx.moveTo(x, 10);
+                    ctx.lineTo(x, height - 30);
+                }
+                ctx.stroke();
+
+                // Draw axes
+                ctx.beginPath();
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                // Y-axis
+                ctx.moveTo(30, 10);
+                ctx.lineTo(30, height - 30);
+                // X-axis
+                ctx.moveTo(30, height - 30);
+                ctx.lineTo(width - 10, height - 30);
+                ctx.stroke();
+
+                // Add labels
+                ctx.fillStyle = '#000';
+                ctx.font = '10px Arial';
+
+                // X-axis labels (wavelengths)
+                for (let i = 0; i <= 30; i += 5) {
+                    const wavelength = 400 + i * 10;
+                    const x = 30 + (i / 30) * (width - 40);
+                    ctx.fillText(wavelength, x - 10, height - 15);
+                }
+
+                // Y-axis labels (reflectance)
+                for (let i = 0; i <= 10; i += 2) {
+                    const y = height - 30 - (i / 10) * (height - 40);
+                    ctx.fillText((i / 10).toFixed(1), 10, y + 3);
+                }
+
+                // Title
+                ctx.font = '12px Arial';
+                ctx.fillText('Wavelength (nm)', width / 2 - 40, height - 5);
+                ctx.save();
+                ctx.translate(15, height / 2);
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillText('Reflectance', 0, 0);
+                ctx.restore();
+
+                // Draw individual reflectance curves for selected paints
+                selectedPaints.forEach(function (paint) {
+                    drawCurve(paint.reflectance, paint.rgb_hex, 1);
+                });
+
+                // Draw the mixed reflectance curve
+                drawCurve(reflectance, '#000000', 2);
+
+                // Helper function to draw a curve
+                function drawCurve(data, color, lineWidth) {
+                    ctx.beginPath();
+                    for (let i = 0; i < data.length; i++) {
+                        const x = 30 + (i / (data.length - 1)) * (width - 40);
+                        const y = height - 30 - (data[i] * (height - 40));
+
+                        if (i === 0) {
+                            ctx.moveTo(x, y);
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    }
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = lineWidth;
+                    ctx.stroke();
+                }
+            }
+
+            // Initialize the UI
+            updateSelectedPaintsUI();
+        }
+    </script>
+</body>
+
+</html>
