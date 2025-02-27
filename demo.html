@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -48,6 +49,36 @@
             border: 1px solid #ddd;
             margin: 10px 0;
         }
+        .tab {
+            cursor: pointer;
+            padding: 10px 20px;
+            margin-right: 4px;
+            border-radius: 4px 4px 0 0;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-bottom: none;
+        }
+        .tab.active {
+            background-color: #fff;
+            border-bottom: 1px solid #fff;
+            margin-bottom: -1px;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 0 4px 4px 4px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .match-result {
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 
@@ -62,38 +93,128 @@
             </div>
 
             <div id="content" class="hidden">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <!-- Paint selection panel -->
-                    <div class="paint-selection">
-                        <h2 class="text-xl font-semibold mb-4">Available Paints</h2>
-                        <div class="mb-4">
-                            <input type="text" id="paint-search" placeholder="Search paints..." 
-                                   class="w-full p-2 border rounded">
-                        </div>
-                        <div id="paint-list" class="paint-list border rounded"></div>
+                <!-- Tab navigation -->
+                <div class="mb-6 border-b">
+                    <div class="flex">
+                        <div class="tab active" data-tab="mixer">Paint Mixer</div>
+                        <div class="tab" data-tab="matcher">Color Matcher</div>
                     </div>
+                </div>
 
-                    <!-- Mixing controls and results -->
-                    <div class="mixing-panel">
-                        <h2 class="text-xl font-semibold mb-4">Paint Mixture</h2>
-                        <div id="selected-paints" class="mb-6"></div>
-
-                        <div id="result-area" class="hidden">
-                            <h3 class="text-lg font-semibold">Mixed Result</h3>
-                            <div class="flex items-center mt-2">
-                                <div id="result-swatch" class="result-swatch"></div>
-                                <div class="ml-4">
-                                    <p>Hex: <span id="result-hex" class="font-mono"></span></p>
-                                    <p>RGB: <span id="result-rgb" class="font-mono"></span></p>
-                                </div>
+                <!-- Paint Mixer Tab -->
+                <div id="mixer-tab" class="tab-content active">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Paint selection panel -->
+                        <div class="paint-selection">
+                            <h2 class="text-xl font-semibold mb-4">Available Paints</h2>
+                            <div class="mb-4">
+                                <input type="text" id="paint-search" placeholder="Search paints..." 
+                                       class="w-full p-2 border rounded">
                             </div>
+                            <div id="paint-list" class="paint-list border rounded"></div>
+                        </div>
 
-                            <h3 class="text-lg font-semibold mt-6">Reflectance Curve</h3>
-                            <canvas id="reflectance-chart" width="500" height="300" class="reflectance-chart"></canvas>
+                        <!-- Mixing controls and results -->
+                        <div class="mixing-panel">
+                            <h2 class="text-xl font-semibold mb-4">Paint Mixture</h2>
+                            <div id="selected-paints" class="mb-6"></div>
+
+                            <div id="result-area" class="hidden">
+                                <h3 class="text-lg font-semibold">Mixed Result</h3>
+                                <div class="flex items-center mt-2">
+                                    <div id="result-swatch" class="result-swatch"></div>
+                                    <div class="ml-4">
+                                        <p>Hex: <span id="result-hex" class="font-mono"></span></p>
+                                        <p>RGB: <span id="result-rgb" class="font-mono"></span></p>
+                                    </div>
+                                </div>
+
+                                <h3 class="text-lg font-semibold mt-6">Reflectance Curve</h3>
+                                <canvas id="reflectance-chart" width="500" height="300" class="reflectance-chart"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
 
+                <!-- Color Matcher Tab -->
+                <div id="matcher-tab" class="tab-content">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Target color section -->
+                        <div class="target-color">
+                            <h2 class="text-xl font-semibold mb-4">Target Color</h2>
+                            
+                            <div class="mb-4 flex items-center">
+                                <div class="flex-1">
+                                    <label class="block text-sm mb-1">HEX Color:</label>
+                                    <input type="text" id="target-hex" placeholder="#RRGGBB" 
+                                       class="w-full p-2 border rounded" value="#3366CC">
+                                </div>
+                                <div class="ml-4">
+                                    <input type="color" id="target-color-picker" value="#3366CC" 
+                                       class="w-12 h-10 block mt-5">
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <button id="toggle-input-type" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">
+                                    Switch to HSV
+                                </button>
+                            </div>
+
+                            <!-- HSV controls (initially hidden) -->
+                            <div id="hsv-controls" class="mb-4 hidden">
+                                <div class="mb-2">
+                                    <label class="block text-sm mb-1">Hue (0-359):</label>
+                                    <input type="range" id="hsv-h" min="0" max="359" value="0" class="w-full">
+                                    <div class="flex justify-between">
+                                        <span class="text-xs">0</span>
+                                        <span class="text-xs">359</span>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="block text-sm mb-1">Saturation (0-100):</label>
+                                    <input type="range" id="hsv-s" min="0" max="100" value="0" class="w-full">
+                                    <div class="flex justify-between">
+                                        <span class="text-xs">0%</span>
+                                        <span class="text-xs">100%</span>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="block text-sm mb-1">Value (0-100):</label>
+                                    <input type="range" id="hsv-v" min="0" max="100" value="0" class="w-full">
+                                    <div class="flex justify-between">
+                                        <span class="text-xs">0%</span>
+                                        <span class="text-xs">100%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <button id="find-matches" class="w-full p-2 bg-green-600 text-white rounded font-medium">
+                                    Find Matching Paints
+                                </button>
+                            </div>
+
+                            <div class="text-sm text-gray-600">
+                                <p>This tool will find the best combination of Golden paints to match your desired color.</p>
+                                <p class="mt-2">Note: Not all colors can be perfectly matched with physical pigments.</p>
+                            </div>
+                        </div>
+
+                        <!-- Match results section -->
+                        <div class="match-results">
+                            <h2 class="text-xl font-semibold mb-4">Match Results</h2>
+                            <div id="match-loading" class="hidden">
+                                <p class="text-center py-10">Finding best paint matches...</p>
+                            </div>
+                            <div id="no-matches" class="hidden">
+                                <p class="text-center py-10 text-gray-500">No matches found yet. Select a color and click "Find Matching Paints".</p>
+                            </div>
+                            <div id="matches-container"></div>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="mt-10 pt-6 border-t">
                     <h2 class="text-xl font-semibold mb-2">About This Tool</h2>
                     <p class="mb-2">This paint mixer simulates the mixing of Golden Heavy Body Acrylics using the
@@ -110,7 +231,7 @@
     <script src="kubelkamunk.js"></script>
 
     <script>
-        // Wait for the Kubelka-Munk library to load
+        // Wait for the DOM to be fully loaded
         window.addEventListener('DOMContentLoaded', function () {
             // Check if the KubelkaMunk library is available
             const checkLibrariesLoaded = setInterval(function () {
@@ -164,6 +285,37 @@
                 // Initialize Kubelka-Munk
                 const km = new KubelkaMunk();
 
+                // Initialize tabs
+                initializeTabs();
+
+                // Initialize Paint Mixer
+                initializePaintMixer(paints, km);
+
+                // Initialize Color Matcher
+                initializeColorMatcher(paints, km);
+            }
+
+            // Initialize tabbed interface
+            function initializeTabs() {
+                const tabs = document.querySelectorAll('.tab');
+                const tabContents = document.querySelectorAll('.tab-content');
+
+                tabs.forEach(tab => {
+                    tab.addEventListener('click', function() {
+                        // Remove active class from all tabs and contents
+                        tabs.forEach(t => t.classList.remove('active'));
+                        tabContents.forEach(c => c.classList.remove('active'));
+                        
+                        // Add active class to clicked tab and corresponding content
+                        this.classList.add('active');
+                        const tabId = this.getAttribute('data-tab');
+                        document.getElementById(`${tabId}-tab`).classList.add('active');
+                    });
+                });
+            }
+
+            // Initialize the paint mixer functionality
+            function initializePaintMixer(paints, km) {
                 // State for selected paints
                 const selectedPaints = [];
 
@@ -424,11 +576,338 @@
                         ctx.stroke();
                     }
                 }
+            }
 
-                // Initialize the UI
-                updateSelectedPaintsUI();
+            // Initialize the color matcher functionality
+            function initializeColorMatcher(paints, km) {
+                // DOM elements
+                const targetHexInput = document.getElementById('target-hex');
+                const targetColorPicker = document.getElementById('target-color-picker');
+                const toggleInputTypeBtn = document.getElementById('toggle-input-type');
+                const hsvControls = document.getElementById('hsv-controls');
+                const hsvHInput = document.getElementById('hsv-h');
+                const hsvSInput = document.getElementById('hsv-s');
+                const hsvVInput = document.getElementById('hsv-v');
+                const findMatchesBtn = document.getElementById('find-matches');
+                const matchesContainer = document.getElementById('matches-container');
+                const matchLoading = document.getElementById('match-loading');
+                const noMatches = document.getElementById('no-matches');
+
+                // Initial state
+                let inputMode = 'rgb';
+                let targetHsv = { h: 0, s: 0, v: 0 };
+                updateHsvFromHex('#3366CC');
+
+                // Show no matches initially
+                noMatches.classList.remove('hidden');
+
+                // Event listeners
+                targetHexInput.addEventListener('input', function(e) {
+                    const value = e.target.value;
+                    if (value.match(/^#[0-9A-Fa-f]{6}$/)) {
+                        targetColorPicker.value = value;
+                        if (inputMode === 'rgb') {
+                            updateHsvFromHex(value);
+                        }
+                    }
+                });
+
+                targetColorPicker.addEventListener('input', function(e) {
+                    const value = e.target.value;
+                    targetHexInput.value = value;
+                    if (inputMode === 'rgb') {
+                        updateHsvFromHex(value);
+                    }
+                });
+
+                toggleInputTypeBtn.addEventListener('click', function() {
+                    if (inputMode === 'rgb') {
+                        inputMode = 'hsv';
+                        this.textContent = 'Switch to RGB';
+                        hsvControls.classList.remove('hidden');
+                        // Ensure HSV is up to date
+                        updateHsvFromHex(targetHexInput.value);
+                    } else {
+                        inputMode = 'rgb';
+                        this.textContent = 'Switch to HSV';
+                        hsvControls.classList.add('hidden');
+                    }
+                });
+
+                hsvHInput.addEventListener('input', updateHexFromHsv);
+                hsvSInput.addEventListener('input', updateHexFromHsv);
+                hsvVInput.addEventListener('input', updateHexFromHsv);
+
+                findMatchesBtn.addEventListener('click', findMatches);
+
+                // Convert RGB to HSV
+                function hexToHsv(hex) {
+                    // Remove # if present
+                    hex = hex.replace('#', '');
+                    
+                    // Convert hex to RGB
+                    const r = parseInt(hex.substring(0, 2), 16) / 255;
+                    const g = parseInt(hex.substring(2, 4), 16) / 255;
+                    const b = parseInt(hex.substring(4, 6), 16) / 255;
+                    
+                    const max = Math.max(r, g, b);
+                    const min = Math.min(r, g, b);
+                    const diff = max - min;
+                    
+                    let h = 0;
+                    if (max === min) {
+                        h = 0;
+                    } else if (max === r) {
+                        h = (60 * ((g - b) / diff) + 360) % 360;
+                    } else if (max === g) {
+                        h = (60 * ((b - r) / diff) + 120) % 360;
+                    } else if (max === b) {
+                        h = (60 * ((r - g) / diff) + 240) % 360;
+                    }
+                    
+                    const s = max === 0 ? 0 : diff / max;
+                    const v = max;
+                    
+                    return { 
+                        h: Math.round(h), 
+                        s: Math.round(s * 100), 
+                        v: Math.round(v * 100) 
+                    };
+                }
+
+                // Convert HSV to RGB
+                function hsvToHex(h, s, v) {
+                    h = h % 360;
+                    s = s / 100;
+                    v = v / 100;
+                    
+                    const c = v * s;
+                    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+                    const m = v - c;
+                    
+                    let r, g, b;
+                    if (h >= 0 && h < 60) {
+                        [r, g, b] = [c, x, 0];
+                    } else if (h >= 60 && h < 120) {
+                        [r, g, b] = [x, c, 0];
+                    } else if (h >= 120 && h < 180) {
+                        [r, g, b] = [0, c, x];
+                    } else if (h >= 180 && h < 240) {
+                        [r, g, b] = [0, x, c];
+                    } else if (h >= 240 && h < 300) {
+                        [r, g, b] = [x, 0, c];
+                    } else {
+                        [r, g, b] = [c, 0, x];
+                    }
+                    
+                    r = Math.round((r + m) * 255);
+                    g = Math.round((g + m) * 255);
+                    b = Math.round((b + m) * 255);
+                    
+                    // Convert to hex
+                    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+                }
+
+                // Update HSV inputs from hex color
+                function updateHsvFromHex(hex) {
+                    targetHsv = hexToHsv(hex);
+                    hsvHInput.value = targetHsv.h;
+                    hsvSInput.value = targetHsv.s;
+                    hsvVInput.value = targetHsv.v;
+                }
+
+                // Update hex input from HSV sliders
+                function updateHexFromHsv() {
+                    targetHsv = {
+                        h: parseInt(hsvHInput.value),
+                        s: parseInt(hsvSInput.value),
+                        v: parseInt(hsvVInput.value)
+                    };
+                    
+                    const hex = hsvToHex(targetHsv.h, targetHsv.s, targetHsv.v);
+                    targetHexInput.value = hex;
+                    targetColorPicker.value = hex;
+                }
+
+                // Approximate reflectance curve from RGB (simplistic approach)
+                function rgbToReflectance(hexColor) {
+                    // Remove # if present
+                    hexColor = hexColor.replace('#', '');
+                    
+                    // Convert hex to RGB
+                    const r = parseInt(hexColor.substring(0, 2), 16) / 255;
+                    const g = parseInt(hexColor.substring(2, 4), 16) / 255;
+                    const b = parseInt(hexColor.substring(4, 6), 16) / 255;
+                    
+                    // Generate a simple approximation (this would be more sophisticated in a real implementation)
+                    return Array(31).fill(0).map((_, i) => {
+                        const wavelength = 400 + i * 10;
+                        
+                        // Approximate sensitivity of RGB to wavelengths
+                        let reflectance = 0;
+                        
+                        // Red sensitivity peaks at longer wavelengths
+                        if (wavelength >= 580) {
+                            reflectance += r * Math.min(1, (wavelength - 580) / 120 + 0.5);
+                        }
+                        
+                        // Green sensitivity peaks at mid wavelengths
+                        if (wavelength >= 490 && wavelength <= 580) {
+                            reflectance += g * (1 - Math.abs((wavelength - 535) / 45));
+                        }
+                        
+                        // Blue sensitivity peaks at shorter wavelengths
+                        if (wavelength <= 490) {
+                            reflectance += b * Math.min(1, (490 - wavelength) / 90 + 0.5);
+                        }
+                        
+                        return Math.min(1, Math.max(0.05, reflectance));
+                    });
+                }
+
+                // Calculate color difference using Kubelka-Munk color similarity
+                function calculateColorDifference(reflectance1, reflectance2) {
+                    if (!km) return 1000; // Large value if KM not initialized
+                    
+                    const lab1 = km.reflectanceToCIELAB(reflectance1);
+                    const lab2 = km.reflectanceToCIELAB(reflectance2);
+                    
+                    return km.colorDifference(lab1, lab2);
+                }
+
+                // Find top 3 paint combinations
+                function findBestTwoPaintCombinations() {
+                    if (!km || paints.length === 0) return [];
+                    
+                    const targetReflectance = rgbToReflectance(targetHexInput.value);
+                    const combinations = [];
+                    
+                    // Try all 2-paint combinations
+                    for (let i = 0; i < paints.length; i++) {
+                        for (let j = i + 1; j < paints.length; j++) {
+                            // Simple optimization with a few concentration ratios
+                            const ratios = [0.1, 0.25, 0.5, 0.75, 0.9];
+                            let bestDifference = Infinity;
+                            let bestRatio = 0.5;
+                            
+                            for (const ratio of ratios) {
+                                const components = [
+                                    { reflectance: paints[i].reflectance, concentration: ratio },
+                                    { reflectance: paints[j].reflectance, concentration: 1 - ratio }
+                                ];
+                                
+                                const mixedReflectance = km.mixReflectance(components);
+                                const difference = calculateColorDifference(targetReflectance, mixedReflectance);
+                                
+                                if (difference < bestDifference) {
+                                    bestDifference = difference;
+                                    bestRatio = ratio;
+                                }
+                            }
+                            
+                            // Store the result
+                            combinations.push({
+                                paints: [
+                                    { ...paints[i], concentration: bestRatio },
+                                    { ...paints[j], concentration: 1 - bestRatio }
+                                ],
+                                difference: bestDifference,
+                                // Calculate the mixed color for display
+                                resultColor: km.rgbToHex(km.reflectanceToRGB(km.mixReflectance([
+                                    { reflectance: paints[i].reflectance, concentration: bestRatio },
+                                    { reflectance: paints[j].reflectance, concentration: 1 - bestRatio }
+                                ])))
+                            });
+                        }
+                    }
+                    
+                    // Sort by color difference (lower is better)
+                    return combinations.sort((a, b) => a.difference - b.difference).slice(0, 5);
+                }
+
+                // Find matching paint combinations
+                function findMatches() {
+                    // Show loading, hide other states
+                    matchLoading.classList.remove('hidden');
+                    noMatches.classList.add('hidden');
+                    matchesContainer.innerHTML = '';
+                    
+                    // Use setTimeout to prevent UI from freezing
+                    setTimeout(() => {
+                        try {
+                            const results = findBestTwoPaintCombinations();
+                            renderMatchResults(results);
+                        } catch (err) {
+                            console.error('Error finding paint matches:', err);
+                            matchesContainer.innerHTML = '<p class="text-red-500">Error finding matches. Please try again.</p>';
+                        } finally {
+                            matchLoading.classList.add('hidden');
+                        }
+                    }, 100);
+                }
+
+                // Render match results
+                function renderMatchResults(results) {
+                    if (!results || results.length === 0) {
+                        noMatches.classList.remove('hidden');
+                        return;
+                    }
+                    
+                    matchesContainer.innerHTML = '';
+                    
+                    results.forEach((result, index) => {
+                        const matchElement = document.createElement('div');
+                        matchElement.className = 'match-result';
+                        
+                        // Create header with target and result color
+                        const header = document.createElement('div');
+                        header.className = 'flex items-center mb-3';
+                        header.innerHTML = `
+                            <div class="flex-1 font-medium">Match #${index + 1}</div>
+                            <div class="flex items-center">
+                                <div style="background-color: ${targetHexInput.value}" class="w-6 h-6 rounded-full mr-1 border"></div>
+                                <div class="text-gray-500 mx-1">➔</div>
+                                <div style="background-color: ${result.resultColor}" class="w-6 h-6 rounded-full border"></div>
+                            </div>
+                            <div class="ml-3 text-sm text-gray-600">Difference: ${result.difference.toFixed(2)}</div>
+                        `;
+                        matchElement.appendChild(header);
+                        
+                        // Create paints list
+                        const paintsList = document.createElement('div');
+                        paintsList.className = 'space-y-2';
+                        
+                        result.paints.forEach(paint => {
+                            const paintItem = document.createElement('div');
+                            paintItem.className = 'flex items-center';
+                            paintItem.innerHTML = `
+                                <div style="background-color: ${paint.rgb_hex}" class="w-8 h-8 rounded-full mr-2 border"></div>
+                                <div class="flex-1">
+                                    <div class="font-medium">${paint.color_name}</div>
+                                    <div class="text-xs text-gray-600">Series ${paint.series}</div>
+                                </div>
+                                <div class="text-sm font-semibold">${Math.round(paint.concentration * 100)}%</div>
+                            `;
+                            paintsList.appendChild(paintItem);
+                        });
+                        
+                        matchElement.appendChild(paintsList);
+                        
+                        // Add to container
+                        matchesContainer.appendChild(matchElement);
+                    });
+                    
+                    // Add a note about mixing
+                    const note = document.createElement('div');
+                    note.className = 'mt-4 p-3 bg-blue-50 text-sm text-blue-800 rounded';
+                    note.innerHTML = `
+                        <p>Mix the paints in the proportions shown. The percentages represent the relative amount of each paint to use.</p>
+                        <p class="mt-1">For more precise mixing, you can add these paints to the Paint Mixer tab and adjust the concentrations.</p>
+                    `;
+                    matchesContainer.appendChild(note);
+                }
             }
         });
     </script>
 </body>
-</html><!DOCTYPE html>
+</html>
