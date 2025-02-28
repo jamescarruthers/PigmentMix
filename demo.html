@@ -188,6 +188,31 @@
                                     </div>
                                 </div>
                             </div>
+                            
+                            <h3 class="font-medium mb-2 mt-6 border-t pt-4">Available Paints</h3>
+                            <div class="mb-3 flex items-center justify-between">
+                                <div class="text-sm">
+                                    <span id="selected-paints-count">0</span> of <span id="total-paints-count">0</span> paints selected
+                                </div>
+                                <div>
+                                    <button id="select-all-paints" class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs mr-1">
+                                        Select All
+                                    </button>
+                                    <button id="clear-all-paints" class="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">
+                                        Clear All
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-2">
+                                <input type="text" id="paint-filter" placeholder="Filter paints..." 
+                                   class="w-full p-2 border rounded text-sm">
+                            </div>
+                            
+                            <div id="available-paints-container" class="border rounded mb-4 h-40 overflow-y-auto p-1">
+                                <!-- Paint selection checkboxes will be added here -->
+                                <div class="text-center text-gray-500 py-12">Loading paints...</div>
+                            </div>
 
                             <div class="mb-4">
                                 <button id="find-matches" class="w-full p-2 bg-green-600 text-white rounded font-medium">
@@ -196,7 +221,7 @@
                             </div>
 
                             <div class="text-sm text-gray-600">
-                                <p>This tool will find the best combination of Golden paints to match your desired color.</p>
+                                <p>This tool will find the best combination of selected Golden paints to match your desired color.</p>
                                 <p class="mt-2">Note: Not all colors can be perfectly matched with physical pigments.</p>
                             </div>
                         </div>
@@ -266,7 +291,8 @@
                         rgb_hex: paint.color.srgb.rgb_hex,
                         reflectance: paint.color.reflectance_curve,
                         series: paint.series || 'N/A',
-                        transparency: paint.transparency || 'N/A'
+                        transparency: paint.transparency || 'N/A',
+                        pigments: paint.pigments?.ci_color_codes || []
                     })).sort((a, b) => a.color_name.localeCompare(b.color_name));
 
                     initializeApp(paints);
@@ -310,6 +336,19 @@
                         this.classList.add('active');
                         const tabId = this.getAttribute('data-tab');
                         document.getElementById(`${tabId}-tab`).classList.add('active');
+                        
+                        // Check if we're switching to the mixer tab and have paints to add
+                        if (tabId === 'mixer' && localStorage.getItem('mixerPaints')) {
+                            const paintsToAdd = JSON.parse(localStorage.getItem('mixerPaints'));
+                            
+                            // Clear localStorage to prevent re-adding on future tab switches
+                            localStorage.removeItem('mixerPaints');
+                            
+                            // Add these paints to the mixer (we'll implement this in the paint mixer)
+                            if (typeof addPaintsToMixer === 'function') {
+                                addPaintsToMixer(paintsToAdd);
+                            }
+                        }
                     });
                 });
             }
@@ -318,6 +357,39 @@
             function initializePaintMixer(paints, km) {
                 // State for selected paints
                 const selectedPaints = [];
+                
+                // Function to add paints from matcher to mixer
+                window.addPaintsToMixer = function(paintsToAdd) {
+                    // Add each paint to the mixer
+                    paintsToAdd.forEach(paint => {
+                        // Check if the paint is already selected
+                        const existingIndex = selectedPaints.findIndex(p => p.id === paint.id);
+                        
+                        if (existingIndex === -1) {
+                            // Add the paint with the specified concentration
+                            selectedPaints.push({
+                                id: paint.id,
+                                color_name: paint.color_name,
+                                rgb_hex: paint.rgb_hex,
+                                reflectance: paint.reflectance,
+                                concentration: paint.concentration
+                            });
+                            
+                            // Update the paint list UI to show it as selected
+                            const paintListItem = document.querySelector(`.paint-list-item[data-id="${paint.id}"]`);
+                            if (paintListItem) {
+                                paintListItem.classList.add('selected');
+                            }
+                        } else {
+                            // Update the concentration if the paint is already selected
+                            selectedPaints[existingIndex].concentration = paint.concentration;
+                        }
+                    });
+                    
+                    // Update the UI
+                    updateSelectedPaintsUI();
+                    updateMixedResult();
+                };
 
                 // Populate paint list
                 const paintListContainer = document.getElementById('paint-list');
@@ -334,7 +406,10 @@
                             <div class="paint-swatch" style="background-color: ${paint.rgb_hex}"></div>
                             <div class="flex-grow">
                                 <div class="font-medium">${paint.color_name}</div>
-                                <div class="text-xs text-gray-500">Series ${paint.series} (${paint.transparency})</div>
+                                <div class="text-xs text-gray-500">
+                                    Series ${paint.series} (${paint.transparency}) 
+                                    ${paint.pigments.length > 0 ? '• ' + paint.pigments.join(', ') : ''}
+                                </div>
                             </div>
                         `;
 
@@ -409,6 +484,9 @@
                             <div style="background-color: ${paint.rgb_hex}" class="w-8 h-8 rounded-full mr-3"></div>
                             <div class="flex-1">
                                 <div class="font-medium">${paint.color_name}</div>
+                                <div class="text-xs text-gray-600">
+                                    ${paint.pigments.length > 0 ? paint.pigments.join(', ') : ''}
+                                </div>
                             </div>
                             <div class="w-32">
                                 <label class="block text-sm">Concentration</label>
@@ -592,14 +670,26 @@
                 const matchesContainer = document.getElementById('matches-container');
                 const matchLoading = document.getElementById('match-loading');
                 const noMatches = document.getElementById('no-matches');
+                const paintFilterInput = document.getElementById('paint-filter');
+                const availablePaintsContainer = document.getElementById('available-paints-container');
+                const selectAllPaintsBtn = document.getElementById('select-all-paints');
+                const clearAllPaintsBtn = document.getElementById('clear-all-paints');
+                const selectedPaintsCountEl = document.getElementById('selected-paints-count');
+                const totalPaintsCountEl = document.getElementById('total-paints-count');
 
                 // Initial state
                 let inputMode = 'rgb';
                 let targetHsv = { h: 0, s: 0, v: 0 };
+                let availablePaints = [...paints]; // Copy the paints array
+                let selectedPaintIds = paints.map(p => p.id); // Initially all paints are selected
                 updateHsvFromHex('#3366CC');
 
                 // Show no matches initially
                 noMatches.classList.remove('hidden');
+                
+                // Update paint counts
+                totalPaintsCountEl.textContent = paints.length;
+                selectedPaintsCountEl.textContent = selectedPaintIds.length;
 
                 // Event listeners
                 targetHexInput.addEventListener('input', function(e) {
@@ -775,16 +865,146 @@
                     return km.colorDifference(lab1, lab2);
                 }
 
-                // Find top 3 paint combinations
+                // Initialize paint selection UI
+                function initializePaintSelection() {
+                    availablePaintsContainer.innerHTML = '';
+                    
+                    // Group paints by series for better organization
+                    const paintsBySeries = {};
+                    paints.forEach(paint => {
+                        const series = paint.series;
+                        if (!paintsBySeries[series]) {
+                            paintsBySeries[series] = [];
+                        }
+                        paintsBySeries[series].push(paint);
+                    });
+                    
+                    // Create a sorted array of series
+                    const seriesList = Object.keys(paintsBySeries).sort((a, b) => {
+                        // Convert to numbers if possible for proper sorting
+                        const numA = parseInt(a);
+                        const numB = parseInt(b);
+                        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                        return a.localeCompare(b);
+                    });
+                    
+                    // Create the paint selector UI grouped by series
+                    seriesList.forEach(series => {
+                        const seriesContainer = document.createElement('div');
+                        seriesContainer.className = 'mb-2';
+                        
+                        // Add series header
+                        const seriesHeader = document.createElement('div');
+                        seriesHeader.className = 'text-xs font-semibold text-gray-600 mb-1 px-1';
+                        seriesHeader.textContent = `Series ${series}`;
+                        seriesContainer.appendChild(seriesHeader);
+                        
+                        // Add paints for this series
+                        paintsBySeries[series].forEach(paint => {
+                            const paintItem = document.createElement('div');
+                            paintItem.className = 'flex items-center p-1 hover:bg-gray-50 paint-item';
+                            paintItem.setAttribute('data-paint-id', paint.id);
+                            paintItem.setAttribute('data-paint-name', paint.color_name.toLowerCase());
+                            
+                            const isChecked = selectedPaintIds.includes(paint.id);
+                            
+                            paintItem.innerHTML = `
+                                <input type="checkbox" id="paint-${paint.id}" 
+                                    class="paint-checkbox mr-2" ${isChecked ? 'checked' : ''}>
+                                <div class="w-4 h-4 rounded-full mr-2" style="background-color: ${paint.rgb_hex}"></div>
+                                <label for="paint-${paint.id}" class="text-sm flex-1 cursor-pointer">
+                                    ${paint.color_name}
+                                    <span class="text-xs text-gray-500 block">
+                                        ${paint.pigments.length > 0 ? paint.pigments.join(', ') : 'No pigment data'}
+                                    </span>
+                                </label>
+                            `;
+                            
+                            // Add event listener to checkbox
+                            const checkbox = paintItem.querySelector(`#paint-${paint.id}`);
+                            checkbox.addEventListener('change', function() {
+                                if (this.checked) {
+                                    // Add to selected paints
+                                    if (!selectedPaintIds.includes(paint.id)) {
+                                        selectedPaintIds.push(paint.id);
+                                    }
+                                } else {
+                                    // Remove from selected paints
+                                    const index = selectedPaintIds.indexOf(paint.id);
+                                    if (index !== -1) {
+                                        selectedPaintIds.splice(index, 1);
+                                    }
+                                }
+                                
+                                // Update selected count
+                                selectedPaintsCountEl.textContent = selectedPaintIds.length;
+                            });
+                            
+                            seriesContainer.appendChild(paintItem);
+                        });
+                        
+                        availablePaintsContainer.appendChild(seriesContainer);
+                    });
+                }
+
+                // Handle paint filter input
+                paintFilterInput.addEventListener('input', function() {
+                    const filterText = this.value.toLowerCase();
+                    const paintItems = availablePaintsContainer.querySelectorAll('.paint-item');
+                    
+                    // Show/hide paint items based on filter
+                    paintItems.forEach(item => {
+                        const paintName = item.getAttribute('data-paint-name');
+                        if (paintName.includes(filterText)) {
+                            item.style.display = '';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                });
+                
+                // Handle select all button
+                selectAllPaintsBtn.addEventListener('click', function() {
+                    const checkboxes = availablePaintsContainer.querySelectorAll('.paint-checkbox');
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = true;
+                    });
+                    
+                    // Update selected paint IDs
+                    selectedPaintIds = paints.map(p => p.id);
+                    selectedPaintsCountEl.textContent = selectedPaintIds.length;
+                });
+                
+                // Handle clear all button
+                clearAllPaintsBtn.addEventListener('click', function() {
+                    const checkboxes = availablePaintsContainer.querySelectorAll('.paint-checkbox');
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = false;
+                    });
+                    
+                    // Clear selected paint IDs
+                    selectedPaintIds = [];
+                    selectedPaintsCountEl.textContent = '0';
+                });
+                
+                // Initialize paint selection UI
+                initializePaintSelection();
+
+                // Find top paint combinations with selected paints only
                 function findBestTwoPaintCombinations() {
-                    if (!km || paints.length === 0) return [];
+                    if (!km || selectedPaintIds.length < 2) {
+                        return []; // Need at least 2 paints to make combinations
+                    }
                     
                     const targetReflectance = rgbToReflectance(targetHexInput.value);
                     const combinations = [];
                     
-                    // Try all 2-paint combinations
-                    for (let i = 0; i < paints.length; i++) {
-                        for (let j = i + 1; j < paints.length; j++) {
+                    // Filter paints to only include selected ones
+                    const selectedPaints = paints.filter(p => selectedPaintIds.includes(p.id));
+                    
+                    // Try all 2-paint combinations of selected paints
+                    for (let i = 0; i < selectedPaints.length; i++) {
+                        for (let j = i + 1; j < selectedPaints.length; j++) {
                             // Simple optimization with a few concentration ratios
                             const ratios = [0.1, 0.25, 0.5, 0.75, 0.9];
                             let bestDifference = Infinity;
@@ -792,8 +1012,8 @@
                             
                             for (const ratio of ratios) {
                                 const components = [
-                                    { reflectance: paints[i].reflectance, concentration: ratio },
-                                    { reflectance: paints[j].reflectance, concentration: 1 - ratio }
+                                    { reflectance: selectedPaints[i].reflectance, concentration: ratio },
+                                    { reflectance: selectedPaints[j].reflectance, concentration: 1 - ratio }
                                 ];
                                 
                                 const mixedReflectance = km.mixReflectance(components);
@@ -808,14 +1028,14 @@
                             // Store the result
                             combinations.push({
                                 paints: [
-                                    { ...paints[i], concentration: bestRatio },
-                                    { ...paints[j], concentration: 1 - bestRatio }
+                                    { ...selectedPaints[i], concentration: bestRatio },
+                                    { ...selectedPaints[j], concentration: 1 - bestRatio }
                                 ],
                                 difference: bestDifference,
                                 // Calculate the mixed color for display
                                 resultColor: km.rgbToHex(km.reflectanceToRGB(km.mixReflectance([
-                                    { reflectance: paints[i].reflectance, concentration: bestRatio },
-                                    { reflectance: paints[j].reflectance, concentration: 1 - bestRatio }
+                                    { reflectance: selectedPaints[i].reflectance, concentration: bestRatio },
+                                    { reflectance: selectedPaints[j].reflectance, concentration: 1 - bestRatio }
                                 ])))
                             });
                         }
@@ -831,6 +1051,13 @@
                     matchLoading.classList.remove('hidden');
                     noMatches.classList.add('hidden');
                     matchesContainer.innerHTML = '';
+                    
+                    // Check if we have enough selected paints
+                    if (selectedPaintIds.length < 2) {
+                        matchLoading.classList.add('hidden');
+                        matchesContainer.innerHTML = '<p class="text-amber-600 p-4">Please select at least 2 paints to find matches.</p>';
+                        return;
+                    }
                     
                     // Use setTimeout to prevent UI from freezing
                     setTimeout(() => {
@@ -884,10 +1111,28 @@
                                 <div style="background-color: ${paint.rgb_hex}" class="w-8 h-8 rounded-full mr-2 border"></div>
                                 <div class="flex-1">
                                     <div class="font-medium">${paint.color_name}</div>
-                                    <div class="text-xs text-gray-600">Series ${paint.series}</div>
+                                    <div class="text-xs text-gray-600">
+                                        Series ${paint.series} • ${paint.pigments.join(', ')}
+                                    </div>
                                 </div>
                                 <div class="text-sm font-semibold">${Math.round(paint.concentration * 100)}%</div>
                             `;
+                            
+                            // Add a button to use this in mixer
+                            const useButton = document.createElement('button');
+                            useButton.className = 'ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs';
+                            useButton.textContent = 'Use in Mixer';
+                            useButton.addEventListener('click', function() {
+                                // Switch to the mixer tab
+                                document.querySelector('.tab[data-tab="mixer"]').click();
+                                
+                                // Store the paints to be added in the mixer
+                                localStorage.setItem('mixerPaints', JSON.stringify(result.paints));
+                                
+                                // The mixer tab will need to check for this localStorage item on activation
+                            });
+                            
+                            paintItem.appendChild(useButton);
                             paintsList.appendChild(paintItem);
                         });
                         
